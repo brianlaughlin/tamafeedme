@@ -110,10 +110,13 @@
     </div>
 
     <button id="feedButton">Feed Me! 🍖</button>
+    <!-- Button to pet the cat -->
+    <button id="petButton">Pet Me! ❤️</button>
     <script>
         const canvas = document.getElementById('catCanvas');
         const ctx = canvas.getContext('2d');
         const feedButton = document.getElementById('feedButton');
+        const petButton = document.getElementById('petButton'); // Get the pet button element
         const statusDiv = document.getElementById('status');
         // const debugInfoDiv = document.getElementById('debugInfo'); // Optional
 
@@ -348,6 +351,35 @@
             }
         }
 
+        // Function to handle petting the cat
+        function petCat() {
+            const pettingThreshold = 90; // Happiness level above which petting annoys the cat
+
+            // Adjust happiness based on current level
+            if (cat.happiness < pettingThreshold) {
+                // Increase happiness if below the threshold
+                cat.happiness += 15;
+                cat.happiness = Math.min(100, cat.happiness); // Cap at 100
+            } else {
+                // Decrease happiness if petted when already very happy (annoyed)
+                cat.happiness -= 25;
+                cat.happiness = Math.max(0, cat.happiness); // Floor at 0
+            }
+
+            // Petting also slightly reduces hunger, if the cat is not full
+            if (cat.hunger > 30) { // Only reduce if hunger is above a certain point
+                cat.hunger -= 3;
+                cat.hunger = Math.max(0, cat.hunger); // Floor at 0
+            }
+
+            // Visual feedback: create a few sparkles around the cat
+            for (let i = 0; i < 3 + Math.floor(Math.random() * 2); i++) {
+                setTimeout(() => createSparkle(canvas.width / 2, canvas.height / 2), i * 50);
+            }
+
+            updateStatus(); // Update the cat's status message
+        }
+
         function createSparkle(x, y) {
             const sparkle = document.createElement('div');
             sparkle.classList.add('sparkle');
@@ -398,42 +430,138 @@
         }
 
         function updateStatus() {
-            let currentStatus = "";
-            let overallFeeling = "";
-
-            // Hunger message
+            let currentHungerMsg = "";
             for (const msg of HUNGER_MESSAGES) {
                 if (cat.hunger >= msg.threshold) {
-                    currentStatus = msg.message;
+                    currentHungerMsg = msg.message;
                     break;
                 }
             }
 
-            // Fatness overlay / additional message
-            let fatnessMsg = "";
+            let currentFatnessMsg = "";
             for (const msg of FATNESS_MESSAGES) {
                 if (cat.fatness >= msg.threshold) {
-                    fatnessMsg = msg.message;
+                    currentFatnessMsg = msg.message;
                     break;
                 }
             }
-            if (cat.fatness < FATNESS_LEVELS.THIN/2) fatnessMsg = "I'm wasting away... 😭";
+            if (cat.fatness < FATNESS_LEVELS.THIN / 2) currentFatnessMsg = "I'm wasting away... 😭";
 
-
-            // Combine messages or prioritize
-            if (cat.hunger > 70) { // Hunger is critical
-                overallFeeling = currentStatus;
-            } else if (cat.fatness >= FATNESS_LEVELS.CHUBBY + 10 && cat.hunger < 30) {
-                overallFeeling = "SO FULL! SO ROUND! BEST DAY EVER! 💖";
-            } else if (cat.happiness < 30 && cat.hunger > 50) {
-                overallFeeling = "Feeling a bit neglected... and hungry... 💔";
+            let happinessMsg = "";
+            // Define happiness messages based on different thresholds
+            if (cat.happiness >= 95) { // Extremely happy
+                happinessMsg = "Feeling absolutely adored! Sparkle time! ✨💖";
+            } else if (cat.happiness >= 70) { // Generally happy
+                happinessMsg = "Purrrr, that's the spot! So happy! 😄";
+            } else if (cat.happiness < 30) { // Low happiness
+                happinessMsg = "Feeling a bit down and lonely... Could use some gentle love. 🥺";
+            } else if (cat.happiness < 50 && cat.hunger < 60) { // Grumpy state: not too happy, and not overly hungry (hunger might take precedence)
+                happinessMsg = "Hmph. I've had enough pats for now. 😒";
             }
+
+            let overallFeeling = "";
+
+            // --- Determine Overall Status Message based on Priority ---
+            // Priority 1: Critical Hunger. This is the most urgent state.
+            if (cat.hunger > 85) { // Corresponds to HUNGER_MESSAGES[0].threshold (Starving)
+                overallFeeling = currentHungerMsg; // Base message: "I'm starving! Feed me NOW! 😿"
+                // Append based on happiness if also grumpy or sad
+                if (happinessMsg.includes("lonely") || happinessMsg.includes("Hmph")) {
+                    overallFeeling += " And this whole no-food thing is making me GRUMPY! 😠";
+                } else if (cat.happiness < 50) { // General low happiness
+                    overallFeeling += " It's making me really sad... 💔";
+                }
+            }
+            // Priority 2: Hungry AND Grumpy. A specific combination.
+            else if (cat.hunger > 60 && happinessMsg.includes("Hmph")) { // Corresponds to HUNGER_MESSAGES[1].threshold (So hungry)
+                overallFeeling = currentHungerMsg + " And yes, I'm grumpy about it! " + happinessMsg;
+            }
+            // Priority 3: Grumpy (but not critically hungry).
+            else if (happinessMsg.includes("Hmph")) {
+                overallFeeling = happinessMsg;
+                if (cat.hunger > 30) { // If also a bit peckish
+                    overallFeeling += " Maybe a snack would improve my mood? 😉";
+                }
+            }
+            // Priority 4: Special "Best Day Ever" State - very full, chubby, and happy.
+            else if (cat.fatness >= FATNESS_LEVELS.CHUBBY + 10 && cat.hunger < 30 && cat.happiness > 80) {
+                overallFeeling = "SO FULL! SO ROUND! SO HAPPY! BEST DAY EVER! 🎉💖";
+            }
+            // Priority 5: Very High Happiness (if not in a higher priority state like starving or grumpy).
+            else if (cat.happiness >= 95) {
+                overallFeeling = happinessMsg; // Base message: "Feeling absolutely adored! Sparkle time! ✨💖"
+                if (cat.hunger > 50) { // If adored but also quite hungry
+                    overallFeeling += " Though a little snack wouldn't go amiss! 😼";
+                } else if (cat.hunger < 20) { // If adored and also very full
+                    overallFeeling += " And my tummy is perfectly full too! 🥰";
+                }
+            }
+            // Priority 6: Default Combinations - for states not covered by specific high-priority messages.
+            // This section tries to combine the most relevant messages if no single overriding state is present.
             else {
-                overallFeeling = `${fatnessMsg} ${currentStatus}`;
+                let parts = []; // Array to hold potential message parts
+
+                // Add happiness message if one is set and relevant
+                if (happinessMsg) {
+                    parts.push(happinessMsg);
+                }
+
+                // Add fatness message if it's notable (not just "normal")
+                // or if there's no strong happiness message (e.g., cat is lonely).
+                // FATNESS_MESSAGES[1].message is "Feeling purrfectly plump! 😊" (Normal)
+                if (currentFatnessMsg && (currentFatnessMsg !== FATNESS_MESSAGES[1].message || !happinessMsg || happinessMsg.includes("lonely"))) {
+                    parts.push(currentFatnessMsg);
+                }
+
+                // Add hunger message if it's notable (i.e., not "full and happy").
+                // HUNGER_MESSAGES[3].message is "I'm full and happy! Purrrr! 🥰" (Full)
+                if (currentHungerMsg && currentHungerMsg !== HUNGER_MESSAGES[3].message) {
+                    // Avoid adding redundant "happy" phrasing if happinessMsg is already strongly positive.
+                    if (!(happinessMsg.includes("So happy!") && currentHungerMsg.includes("Could eat!"))) {
+                         parts.push(currentHungerMsg);
+                    }
+                }
+                
+                // Construct the overallFeeling from the collected parts.
+                if (parts.length > 0) {
+                    // Attempt to prioritize positive happiness messages if multiple parts exist.
+                    if (happinessMsg && happinessMsg !== "Feeling a bit down and lonely... Could use some gentle love. 🥺") {
+                        overallFeeling = happinessMsg; // Start with the positive happiness message.
+                        // Append hunger if relevant and not conflicting.
+                        if (currentHungerMsg !== HUNGER_MESSAGES[3].message && cat.hunger >= 30) { // HUNGER_MESSAGES[2].threshold (A little peckish)
+                            overallFeeling += " " + currentHungerMsg.split('.')[0] + "."; // Add first sentence of hunger message.
+                        } 
+                        // Append fatness if relevant, not normal, and cat isn't "adored" (which implies high happiness).
+                        else if (currentFatnessMsg !== FATNESS_MESSAGES[1].message && !happinessMsg.includes("adored")) {
+                            overallFeeling += " " + currentFatnessMsg.split('!')[0] + "."; // Add first part of fatness message.
+                        }
+                    } 
+                    // If multiple messages and no prioritized positive happiness, or if happiness is negative.
+                    else if (parts.length > 1) { 
+                        // Default combination: start with happiness (if any) or fatness.
+                        if (happinessMsg) {
+                            overallFeeling = happinessMsg;
+                        } else {
+                            overallFeeling = currentFatnessMsg; // Fallback to fatness if no happiness message.
+                        }
+                        // Append hunger message if relevant and different from current overallFeeling.
+                        if (currentHungerMsg !== HUNGER_MESSAGES[3].message && cat.hunger >=30) {
+                           if (overallFeeling !== currentHungerMsg) { // Avoid direct duplication
+                               overallFeeling += " " + currentHungerMsg;
+                           }
+                        } 
+                        // Special case: if cat is normal fatness, no specific happiness, and full, then it's content.
+                        else if (!happinessMsg && currentFatnessMsg === FATNESS_MESSAGES[1].message) {
+                             overallFeeling = FATNESS_MESSAGES[1].message + " " + HUNGER_MESSAGES[3].message; // "Feeling purrfectly plump! I'm full and happy!"
+                        }
+                    } else { // Only one part was collected.
+                         overallFeeling = parts[0];
+                    }
+                }
             }
 
-
-            statusDiv.textContent = overallFeeling.trim() || "Purrrr! Content for now. 😊";
+            // Final fallback message if overallFeeling is still empty.
+            statusDiv.textContent = overallFeeling.trim() || "Purrrr! Content for now. 😊"; 
             // if (debugInfoDiv) debugInfoDiv.textContent = `Fatness: ${cat.fatness.toFixed(0)}, Hunger: ${cat.hunger.toFixed(0)}, Happiness: ${cat.happiness.toFixed(0)}`;
         }
 
@@ -473,6 +601,7 @@
         }
 
         feedButton.addEventListener('click', feedCat);
+        petButton.addEventListener('click', petCat); // Event listener for the "Pet Me!" button
 
         // Initial setup
         updateStatus();
